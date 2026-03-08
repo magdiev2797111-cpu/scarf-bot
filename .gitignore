@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and runtime artifacts
+*.log
+bot.out.log
+bot.err.log
+
+# Local data
+orders.json
+
+# IDE
+.vscode/
+.idea/

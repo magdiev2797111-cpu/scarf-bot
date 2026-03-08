@@ -6,7 +6,11 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except Exception:
+    load_dotenv = None
+
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
     Application,
@@ -17,8 +21,10 @@ from telegram.ext import (
     filters,
 )
 
-load_dotenv()
+if Path(".env").exists() and load_dotenv is not None:
+    load_dotenv(override=False)
 
+IS_RAILWAY = bool(os.getenv("RAILWAY_ENVIRONMENT"))
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_ID_RAW = os.getenv("ADMIN_ID", "").strip()
 ADMIN_ID = int(ADMIN_ID_RAW) if ADMIN_ID_RAW.isdigit() else None
@@ -586,9 +592,13 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+async def log_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.exception("Необработанная ошибка в обработчике Telegram", exc_info=context.error)
+
+
 def build_app() -> Application:
     if not BOT_TOKEN:
-        raise ValueError("Не найден BOT_TOKEN. Добавьте его в .env")
+        raise ValueError("Не найден BOT_TOKEN в переменных окружения. Для Railway задайте BOT_TOKEN в Variables.")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -628,6 +638,7 @@ def build_app() -> Application:
     app.add_handler(MessageHandler(filters.Regex(f"^{MENU_REPORT_MONTH}$"), menu_router))
     app.add_handler(MessageHandler(filters.Regex(f"^{MENU_TOP_MODELS_MONTH}$"), menu_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_router))
+    app.add_error_handler(log_error)
 
     return app
 
@@ -642,8 +653,19 @@ def main() -> None:
     except RuntimeError:
         asyncio.set_event_loop(asyncio.new_event_loop())
 
-    app.run_polling()
+    logger.info("Запуск бота в режиме long polling")
+    if IS_RAILWAY:
+        logger.info("Среда Railway обнаружена. Используются только переменные окружения сервиса.")
+
+    app.run_polling(
+        poll_interval=1.0,
+        timeout=30,
+        bootstrap_retries=-1,
+        drop_pending_updates=False,
+        close_loop=False,
+    )
 
 
 if __name__ == "__main__":
     main()
+
